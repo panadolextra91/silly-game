@@ -51,6 +51,7 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         addKeyListener(this);
         
         setFocusable(true);
+        requestFocusInWindow();
     }
     
     @Override
@@ -70,6 +71,7 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
         drawProjectiles(g2d);
         drawEnemies(g2d);
         drawTowers(g2d);
+        drawHouse(g2d);
         
         // Draw UI overlays
         drawTowerPlacement(g2d);
@@ -109,25 +111,23 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
      * Draw enemy path
      */
     private void drawPath(Graphics2D g2d) {
-        List<Vector2D> path = gameState.getEnemyPath();
-        if (path.size() < 2) return;
-        
-        g2d.setColor(PATH_COLOR);
-        g2d.setStroke(new BasicStroke(20, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        
-        for (int i = 0; i < path.size() - 1; i++) {
-            Vector2D start = path.get(i);
-            Vector2D end = path.get(i + 1);
-            g2d.drawLine((int) start.x, (int) start.y, (int) end.x, (int) end.y);
-        }
-        
-        // Draw path direction arrows
-        g2d.setColor(new Color(101, 67, 33)); // Dark brown
-        g2d.setStroke(new BasicStroke(2));
-        for (int i = 0; i < path.size() - 1; i++) {
-            Vector2D start = path.get(i);
-            Vector2D end = path.get(i + 1);
-            drawArrow(g2d, start, end);
+        List<List<Vector2D>> paths = gameState.getEnemyPaths();
+        for (List<Vector2D> path : paths) {
+            if (path.size() < 2) continue;
+            g2d.setColor(PATH_COLOR);
+            g2d.setStroke(new BasicStroke(20, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            for (int i = 0; i < path.size() - 1; i++) {
+                Vector2D start = path.get(i);
+                Vector2D end = path.get(i + 1);
+                g2d.drawLine((int) start.x, (int) start.y, (int) end.x, (int) end.y);
+            }
+            g2d.setColor(new Color(101, 67, 33));
+            g2d.setStroke(new BasicStroke(2));
+            for (int i = 0; i < path.size() - 1; i++) {
+                Vector2D start = path.get(i);
+                Vector2D end = path.get(i + 1);
+                drawArrow(g2d, start, end);
+            }
         }
     }
     
@@ -265,6 +265,16 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     }
     
     /**
+     * Draw house
+     */
+    private void drawHouse(Graphics2D g2d) {
+        House house = gameState.getHouse();
+        if (house != null) {
+            house.render(g2d);
+        }
+    }
+    
+    /**
      * Draw status messages
      */
     private void drawStatusMessages(Graphics2D g2d) {
@@ -282,6 +292,41 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             int y = height - 30;
             g2d.drawString(statusMessage, x, y);
         }
+        
+        // Draw game timer
+        drawGameTimer(g2d);
+    }
+    
+    /**
+     * Draw game timer
+     */
+    private void drawGameTimer(Graphics2D g2d) {
+        double timeLeft = gameState.getGameDuration() - gameState.getGameTime();
+        if (timeLeft < 0) timeLeft = 0;
+        
+        g2d.setColor(new Color(0, 0, 0, 150));
+        g2d.fillRect(10, 10, 200, 30);
+        
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.BOLD, 16));
+        g2d.drawString(String.format("Time: %.1f", timeLeft), 20, 30);
+        
+        // Draw timer bar
+        double progress = timeLeft / gameState.getGameDuration();
+        int barWidth = 180;
+        int barHeight = 8;
+        int barX = 20;
+        int barY = 35;
+        
+        g2d.setColor(Color.RED);
+        g2d.fillRect(barX, barY, barWidth, barHeight);
+        
+        g2d.setColor(Color.GREEN);
+        int greenWidth = (int) (barWidth * progress);
+        g2d.fillRect(barX, barY, greenWidth, barHeight);
+        
+        g2d.setColor(Color.BLACK);
+        g2d.drawRect(barX, barY, barWidth, barHeight);
     }
     
     /**
@@ -319,6 +364,7 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     @Override
     public void mouseClicked(MouseEvent e) {
         mousePosition.set(e.getX(), e.getY());
+        System.out.println("[INPUT][MouseClicked] button=" + e.getButton() + " pos=(" + e.getX() + "," + e.getY() + ")" );
         
         if (placingTower) {
             placeTower();
@@ -330,18 +376,22 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     @Override
     public void mouseMoved(MouseEvent e) {
         mousePosition.set(e.getX(), e.getY());
+        // Debug move logs can be noisy; keep minimal
     }
     
     /**
      * Place a tower at mouse position
      */
     private void placeTower() {
+        System.out.println("[ACTION][PlaceTowerAttempt] type=" + selectedTowerType + " pos=" + mousePosition);
         Tower tower = createTower(selectedTowerType, mousePosition.x, mousePosition.y);
         if (tower != null) {
             if (gameState.placeTower(tower)) {
                 showMessage("Tower placed!");
+                System.out.println("[ACTION][PlaceTower] success id=" + tower.getId());
             } else {
                 showMessage("Cannot place tower here!");
+                System.out.println("[ACTION][PlaceTower] rejected");
             }
         }
         placingTower = false;
@@ -357,6 +407,7 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
             Vector2D towerPos = tower.getPosition();
             if (mousePosition.distanceTo(towerPos) <= 15) {
                 selectedTower = tower;
+                System.out.println("[ACTION][SelectTower] id=" + tower.getId());
                 break;
             }
         }
@@ -365,40 +416,57 @@ public class GamePanel extends JPanel implements MouseListener, MouseMotionListe
     // Key event handlers
     @Override
     public void keyPressed(KeyEvent e) {
+        System.out.println("[INPUT][KeyPressed] code=" + e.getKeyCode());
         switch (e.getKeyCode()) {
+            case KeyEvent.VK_P:
+                // Forward pause toggle via the UI panel if available
+                SwingUtilities.getWindowAncestor(this);
+                if (SwingUtilities.getWindowAncestor(this) instanceof GameWindow) {
+                    GameWindow gw = (GameWindow) SwingUtilities.getWindowAncestor(this);
+                    gw.togglePause();
+                }
+                break;
             case KeyEvent.VK_1:
                 selectedTowerType = TowerType.ARCHER;
                 placingTower = true;
+                System.out.println("[ACTION][SelectTowerType] ARCHER");
                 break;
             case KeyEvent.VK_2:
                 selectedTowerType = TowerType.CANNON;
                 placingTower = true;
+                System.out.println("[ACTION][SelectTowerType] CANNON");
                 break;
             case KeyEvent.VK_3:
                 selectedTowerType = TowerType.LIGHTNING;
                 placingTower = true;
+                System.out.println("[ACTION][SelectTowerType] LIGHTNING");
                 break;
             case KeyEvent.VK_4:
                 selectedTowerType = TowerType.ICE;
                 placingTower = true;
+                System.out.println("[ACTION][SelectTowerType] ICE");
                 break;
             case KeyEvent.VK_5:
                 selectedTowerType = TowerType.POISON;
                 placingTower = true;
+                System.out.println("[ACTION][SelectTowerType] POISON");
                 break;
             case KeyEvent.VK_U:
                 if (selectedTower != null) {
+                    System.out.println("[ACTION][UpgradeTower] id=" + selectedTower.getId());
                     upgradeTower();
                 }
                 break;
             case KeyEvent.VK_S:
                 if (selectedTower != null) {
+                    System.out.println("[ACTION][SellTower] id=" + selectedTower.getId());
                     sellTower();
                 }
                 break;
             case KeyEvent.VK_ESCAPE:
                 placingTower = false;
                 selectedTower = null;
+                System.out.println("[ACTION][CancelPlacement]");
                 break;
         }
     }

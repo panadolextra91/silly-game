@@ -3,14 +3,15 @@ package ui;
 import core.*;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+//import java.awt.event.ActionEvent;
+//import java.awt.event.ActionListener;
 
 /**
  * UI control panel for game information and controls
  */
 public class UIPanel extends JPanel implements GameEventListener {
     private GameState gameState;
+    private GameWindow gameWindow;
     
     // UI Components
     private JLabel healthLabel;
@@ -48,6 +49,10 @@ public class UIPanel extends JPanel implements GameEventListener {
         initializeComponents();
         setupEventListeners();
         updateDisplay();
+    }
+    
+    public void setGameWindow(GameWindow gameWindow) {
+        this.gameWindow = gameWindow;
     }
     
     /**
@@ -90,7 +95,7 @@ public class UIPanel extends JPanel implements GameEventListener {
         ));
         panel.setLayout(new GridLayout(5, 1, 5, 5));
         
-        healthLabel = createInfoLabel("Health: 20");
+        healthLabel = createInfoLabel("House Health: 100");
         moneyLabel = createInfoLabel("Money: $200");
         scoreLabel = createInfoLabel("Score: 0");
         killsLabel = createInfoLabel("Kills: 0");
@@ -277,16 +282,16 @@ public class UIPanel extends JPanel implements GameEventListener {
         gameState.getEventManager().addListener(EventType.ENEMY_KILLED, this);
         
         // Control button listeners
-        pauseButton.addActionListener(e -> togglePause());
-        speedButton.addActionListener(e -> cycleSpeed());
-        restartButton.addActionListener(e -> restartGame());
+        pauseButton.addActionListener(e -> { System.out.println("[INPUT][Click] Pause"); togglePause(); });
+        speedButton.addActionListener(e -> { System.out.println("[INPUT][Click] Speed"); cycleSpeed(); });
+        restartButton.addActionListener(e -> { System.out.println("[INPUT][Click] Restart"); restartGame(); });
         
         // Tower button listeners (these would trigger tower placement mode)
-        archerButton.addActionListener(e -> selectTower("archer"));
-        cannonButton.addActionListener(e -> selectTower("cannon"));
-        lightningButton.addActionListener(e -> selectTower("lightning"));
-        iceButton.addActionListener(e -> selectTower("ice"));
-        poisonButton.addActionListener(e -> selectTower("poison"));
+        archerButton.addActionListener(e -> { System.out.println("[INPUT][Click] Tower=archer"); selectTower("archer"); });
+        cannonButton.addActionListener(e -> { System.out.println("[INPUT][Click] Tower=cannon"); selectTower("cannon"); });
+        lightningButton.addActionListener(e -> { System.out.println("[INPUT][Click] Tower=lightning"); selectTower("lightning"); });
+        iceButton.addActionListener(e -> { System.out.println("[INPUT][Click] Tower=ice"); selectTower("ice"); });
+        poisonButton.addActionListener(e -> { System.out.println("[INPUT][Click] Tower=poison"); selectTower("poison"); });
     }
     
     /**
@@ -301,7 +306,9 @@ public class UIPanel extends JPanel implements GameEventListener {
      * Update all display elements
      */
     private void updateDisplay() {
-        healthLabel.setText("Health: " + gameState.getPlayerHealth());
+        House house = gameState.getHouse();
+        int houseHealth = house != null ? house.getCurrentHealth() : 0;
+        healthLabel.setText("House Health: " + houseHealth);
         moneyLabel.setText("Money: $" + gameState.getPlayerMoney());
         waveLabel.setText("Wave: " + gameState.getCurrentWave());
         scoreLabel.setText("Score: " + gameState.getScore());
@@ -356,9 +363,11 @@ public class UIPanel extends JPanel implements GameEventListener {
      * Toggle pause state
      */
     private void togglePause() {
-        paused = !paused;
-        pauseButton.setText(paused ? "Resume" : "Pause");
-        // Pause functionality would be implemented in the game loop
+        if (gameWindow != null) {
+            gameWindow.togglePause();
+            paused = gameWindow.isPaused();
+            pauseButton.setText(paused ? "Resume" : "Pause");
+        }
     }
     
     /**
@@ -418,6 +427,14 @@ public class UIPanel extends JPanel implements GameEventListener {
                 case WAVE_STARTED:
                 case WAVE_COMPLETED:
                 case ENEMY_KILLED:
+                case GAME_OVER:
+                case ENEMY_SPAWNED:
+                case ENEMY_REACHED_END:
+                case PROJECTILE_FIRED:
+                case TOWER_SOLD:
+                case TOWER_UPGRADED:
+                case PROJECTILE_HIT:
+                case TOWER_PLACED:
                     updateDisplay();
                     break;
             }

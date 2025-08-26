@@ -2,6 +2,7 @@ package entities.projectiles;
 
 import core.GameObject;
 import entities.enemies.Enemy;
+import core.GameState;
 import utils.Vector2D;
 import java.awt.Graphics2D;
 import java.awt.Color;
@@ -37,13 +38,24 @@ public abstract class Projectile extends GameObject {
     
     @Override
     protected void updateLogic(double deltaTime) {
+        // Home towards target if available
+        if (target != null && target.isActive()) {
+            Vector2D directionToTarget = target.getPosition().subtract(position).normalize();
+            this.velocity = directionToTarget.multiply(speed);
+            this.targetPosition = target.getPosition();
+        }
+        
         // Move projectile
         Vector2D movement = velocity.multiply(deltaTime);
         position = position.add(movement);
         distanceTraveled += movement.magnitude();
+        // Debug movement occasionally
+        // System.out.println("[PROJ][Move] id=" + getId() + " pos=" + position + " dist=" + String.format("%.1f", distanceTraveled));
         
         // Check if projectile should be destroyed
-        if (distanceTraveled >= maxRange || shouldDestroy()) {
+        boolean outOfRange = (target == null || !target.isActive()) && distanceTraveled >= maxRange;
+        if (outOfRange || shouldDestroy()) {
+            System.out.println("[PROJ][Destroy] id=" + getId() + " reason=" + (distanceTraveled >= maxRange ? "range" : "custom"));
             destroy();
             return;
         }
@@ -52,6 +64,7 @@ public abstract class Projectile extends GameObject {
         if (target != null && target.isActive()) {
             if (position.distanceTo(target.getPosition()) <= size + 6) {
                 onHit(target);
+                System.out.println("[PROJ][HitTarget] proj=" + getId() + " enemy=" + target.getId() + " dmg=" + damage);
                 destroy();
             }
         } else {
@@ -59,6 +72,7 @@ public abstract class Projectile extends GameObject {
             Enemy hitEnemy = checkCollisionWithEnemies();
             if (hitEnemy != null) {
                 onHit(hitEnemy);
+                System.out.println("[PROJ][HitAny] proj=" + getId() + " enemy=" + hitEnemy.getId() + " dmg=" + damage);
                 destroy();
             }
         }
@@ -93,8 +107,11 @@ public abstract class Projectile extends GameObject {
      * Check collision with all enemies
      */
     protected Enemy checkCollisionWithEnemies() {
-        // This would be provided by the game state
-        // For now, return null
+        for (Enemy enemy : GameState.getInstance().getEnemies()) {
+            if (enemy.isActive() && position.distanceTo(enemy.getPosition()) <= size + 6) {
+                return enemy;
+            }
+        }
         return null;
     }
     
@@ -112,101 +129,4 @@ public abstract class Projectile extends GameObject {
     }
 }
 
-/**
- * Arrow projectile for archer towers
- */
-class ArrowProjectile extends Projectile {
-    
-    public ArrowProjectile(Vector2D startPos, Vector2D targetPos, int damage, double speed) {
-        super(startPos, targetPos, damage, speed);
-        this.color = new Color(139, 69, 19); // Brown
-        this.size = 3;
-    }
-    
-    @Override
-    protected void onHit(Enemy enemy) {
-        enemy.takeDamage(damage, entities.enemies.DamageType.PHYSICAL);
-    }
-}
 
-/**
- * Cannonball projectile for cannon towers
- */
-class CannonballProjectile extends Projectile {
-    private double splashRadius;
-    
-    public CannonballProjectile(Vector2D startPos, Vector2D targetPos, int damage, double speed) {
-        super(startPos, targetPos, damage, speed);
-        this.color = Color.DARK_GRAY;
-        this.size = 6;
-        this.splashRadius = 25.0;
-    }
-    
-    @Override
-    protected void onHit(Enemy enemy) {
-        // Apply splash damage to all enemies in radius
-        applySplashDamage(position, damage, splashRadius);
-    }
-    
-    private void applySplashDamage(Vector2D center, int damage, double radius) {
-        // This would iterate through all enemies in the game
-        // For now, just damage the direct target
-        if (target != null) {
-            target.takeDamage(damage, entities.enemies.DamageType.PHYSICAL);
-        }
-    }
-}
-
-/**
- * Lightning bolt - instant hit
- */
-class LightningBolt extends Projectile {
-    
-    public LightningBolt(Vector2D startPos, Vector2D targetPos, int damage) {
-        super(startPos, targetPos, damage, 1000.0); // Very fast
-        this.color = Color.YELLOW;
-        this.size = 2;
-        this.maxRange = 150.0;
-    }
-    
-    @Override
-    protected void onHit(Enemy enemy) {
-        enemy.takeDamage(damage, entities.enemies.DamageType.MAGICAL);
-    }
-}
-
-/**
- * Ice shard projectile
- */
-class IceShardProjectile extends Projectile {
-    
-    public IceShardProjectile(Vector2D startPos, Vector2D targetPos, int damage, double speed) {
-        super(startPos, targetPos, damage, speed);
-        this.color = new Color(173, 216, 230); // Light blue
-        this.size = 4;
-    }
-    
-    @Override
-    protected void onHit(Enemy enemy) {
-        enemy.takeDamage(damage, entities.enemies.DamageType.ICE);
-        enemy.applyFreeze(2.0);
-    }
-}
-
-/**
- * Poison blob projectile
- */
-class PoisonBlobProjectile extends Projectile {
-    
-    public PoisonBlobProjectile(Vector2D startPos, Vector2D targetPos, int damage, double speed) {
-        super(startPos, targetPos, damage, speed);
-        this.color = new Color(128, 255, 0); // Lime green
-        this.size = 5;
-    }
-    
-    @Override
-    protected void onHit(Enemy enemy) {
-        enemy.takeDamage(damage, entities.enemies.DamageType.POISON);
-        enemy.applyPoison(5.0, damage / 2);
-    }
-}

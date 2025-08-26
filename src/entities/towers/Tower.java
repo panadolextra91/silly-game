@@ -1,10 +1,14 @@
 package entities.towers;
 
 import core.GameObject;
+import core.GameState;
 import entities.enemies.Enemy;
+import entities.enemies.DamageType;
+import entities.projectiles.Projectile;
+import entities.projectiles.ArrowProjectile;
 import patterns.strategies.TargetingStrategy;
 import patterns.strategies.FirstTargetingStrategy;
-import utils.Vector2D;
+//import utils.Vector2D;
 import java.awt.Graphics2D;
 import java.awt.Color;
 import java.util.List;
@@ -27,6 +31,11 @@ public abstract class Tower extends GameObject {
     protected int upgradeCost;
     protected boolean canTargetFlying;
     
+    // Tower health system
+    protected int maxHealth;
+    protected int currentHealth;
+    protected boolean isDestroyed;
+    
     // Tower stats
     protected int totalKills;
     protected int totalDamageDealt;
@@ -41,9 +50,15 @@ public abstract class Tower extends GameObject {
         this.level = 1;
         this.upgradeCost = 50;
         this.canTargetFlying = true;
-        this.timeSinceLastShot = 0.0;
+        // Start ready to shoot so first target in range fires immediately
+        this.timeSinceLastShot = (fireRate > 0) ? (1.0 / fireRate) : 0.0;
         this.totalKills = 0;
         this.totalDamageDealt = 0;
+        
+        // Initialize tower health
+        this.maxHealth = 100;
+        this.currentHealth = maxHealth;
+        this.isDestroyed = false;
         
         // Default targeting strategy
         this.targetingStrategy = new FirstTargetingStrategy();
@@ -51,6 +66,8 @@ public abstract class Tower extends GameObject {
     
     @Override
     protected void updateLogic(double deltaTime) {
+        if (isDestroyed) return;
+        
         timeSinceLastShot += deltaTime;
         
         // Try to attack if ready
@@ -67,7 +84,11 @@ public abstract class Tower extends GameObject {
     @Override
     protected void draw(Graphics2D g2d) {
         // Draw tower as colored rectangle
-        g2d.setColor(color);
+        if (isDestroyed) {
+            g2d.setColor(Color.GRAY);
+        } else {
+            g2d.setColor(color);
+        }
         int x = (int) (position.x - size / 2);
         int y = (int) (position.y - size / 2);
         g2d.fillRect(x, y, size, size);
@@ -79,6 +100,9 @@ public abstract class Tower extends GameObject {
         // Draw level indicator
         g2d.setColor(Color.WHITE);
         g2d.drawString(String.valueOf(level), x + 2, y + size - 2);
+        
+        // Draw health bar
+        drawHealthBar(g2d);
         
         // Draw range indicator if tower is selected
         if (isSelected()) {
@@ -94,10 +118,22 @@ public abstract class Tower extends GameObject {
         if (!enemiesInRange.isEmpty()) {
             Enemy target = targetingStrategy.selectTarget(enemiesInRange, this);
             if (target != null) {
+                System.out.println("[FIRE][Tower] id=" + getId() + " type=" + getClass().getSimpleName() +
+                    " -> enemy id=" + target.getId());
                 performAttack(target);
                 timeSinceLastShot = 0.0;
             }
         }
+    }
+    
+    /**
+     * Fire a projectile at the target
+     */
+    protected void fireProjectile(Enemy target, int damage, DamageType damageType) {
+        Projectile projectile = new ArrowProjectile(position.x, position.y, target, damage, damageType, color);
+        GameState.getInstance().fireProjectile(projectile);
+        System.out.println("[FIRE][Projectile] tower=" + getId() + " proj=" + projectile.getId() +
+            " target=" + target.getId() + " dmg=" + damage + " type=" + damageType);
     }
     
     /**
@@ -120,7 +156,7 @@ public abstract class Tower extends GameObject {
         List<Enemy> allEnemies = getCurrentEnemies(); // This will be provided by game state
         
         for (Enemy enemy : allEnemies) {
-            if (enemy.isActive() && isInRange(enemy) && canTarget(enemy)) {
+            if (enemy != null && enemy.isActive() && isInRange(enemy) && canTarget(enemy)) {
                 enemiesInRange.add(enemy);
             }
         }
@@ -167,6 +203,68 @@ public abstract class Tower extends GameObject {
     }
     
     /**
+     * Draw health bar above the tower
+     */
+    protected void drawHealthBar(Graphics2D g2d) {
+        // Always show health bar for better visibility
+        int barWidth = size;
+        int barHeight = 4;
+        int x = (int) (position.x - barWidth / 2);
+        int y = (int) (position.y - size / 2 - barHeight - 2);
+        
+        // Background
+        g2d.setColor(Color.RED);
+        g2d.fillRect(x, y, barWidth, barHeight);
+        
+        // Health
+        g2d.setColor(Color.GREEN);
+        int healthWidth = (int) (barWidth * ((double) currentHealth / maxHealth));
+        g2d.fillRect(x, y, healthWidth, barHeight);
+        
+        // Border
+        g2d.setColor(Color.BLACK);
+        g2d.drawRect(x, y, barWidth, barHeight);
+    }
+    
+    /**
+     * Take damage from enemy attack
+     */
+    public void takeDamage(int damage) {
+        if (isDestroyed) return;
+        
+        int before = currentHealth;
+        currentHealth -= damage;
+        System.out.println("[DMG][Tower] id=" + getId() + " type=" + getClass().getSimpleName() +
+            " dmg=" + damage + " from=" + before + " -> " + currentHealth);
+        if (currentHealth <= 0) {
+            currentHealth = 0;
+            isDestroyed = true;
+            destroy();
+        }
+    }
+    
+    /**
+     * Check if tower is destroyed
+     */
+    public boolean isDestroyed() {
+        return isDestroyed;
+    }
+    
+    /**
+     * Get current health
+     */
+    public int getCurrentHealth() {
+        return currentHealth;
+    }
+    
+    /**
+     * Get max health
+     */
+    public int getMaxHealth() {
+        return maxHealth;
+    }
+    
+    /**
      * Upgrade the tower to the next level
      */
     public boolean upgrade() {
@@ -200,8 +298,8 @@ public abstract class Tower extends GameObject {
      * This method will be overridden or provided by dependency injection
      */
     protected List<Enemy> getCurrentEnemies() {
-        // This is a placeholder - will be provided by the game state
-        return new ArrayList<>();
+        // Get enemies from game state
+        return GameState.getInstance().getEnemies();
     }
     
     /**

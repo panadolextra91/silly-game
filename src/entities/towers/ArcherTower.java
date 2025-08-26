@@ -1,7 +1,7 @@
 package entities.towers;
 
 import entities.enemies.Enemy;
-import entities.projectiles.*;
+//import entities.projectiles.*;
 import java.awt.Color;
 
 /**
@@ -17,8 +17,7 @@ public class ArcherTower extends Tower {
     
     @Override
     protected void performAttack(Enemy target) {
-        // For now, apply damage directly
-        fireProjectile(target);
+        fireProjectile(target, damage, entities.enemies.DamageType.PHYSICAL);
         addDamageDealt(damage);
     }
     
@@ -56,12 +55,5 @@ public class ArcherTower extends Tower {
         return 50;
     }
     
-    /**
-     * Fire a projectile (placeholder - will be handled by projectile system)
-     */
-    private void fireProjectile(Enemy target) {
-        // This will be implemented when we add the projectile system
-        // For now, we'll apply damage directly
-        target.takeDamage(damage, entities.enemies.DamageType.PHYSICAL);
-    }
+
 }

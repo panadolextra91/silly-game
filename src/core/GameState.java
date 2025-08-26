@@ -18,14 +18,20 @@ public class GameState implements GameEventListener {
     private List<Enemy> enemies;
     private List<Tower> towers;
     private List<Projectile> projectiles;
-    private List<Vector2D> enemyPath;
+    private List<List<Vector2D>> enemyPaths;
+    private House house;
     
     // Game statistics
-    private int playerHealth;
     private int playerMoney;
     private int currentWave;
     private int enemiesKilled;
     private int score;
+    
+    // Game timer
+    private double gameTime;
+    private final double GAME_DURATION = 30.0; // 30 seconds
+    private boolean gameWon;
+    private boolean gameLost;
     
     // Wave management
     private WaveManager waveManager;
@@ -34,8 +40,9 @@ public class GameState implements GameEventListener {
     private final double WAVE_DELAY = 5.0; // seconds between waves
     
     // Game settings
-    private final int STARTING_HEALTH = 20;
+    //private final int STARTING_HEALTH = 20;
     private final int STARTING_MONEY = 200;
+    private int currentLevel = 1;
     
     // Event system
     private GameEventManager eventManager;
@@ -61,13 +68,17 @@ public class GameState implements GameEventListener {
         projectiles = new CopyOnWriteArrayList<>();
         
         // Initialize game stats
-        playerHealth = STARTING_HEALTH;
         playerMoney = STARTING_MONEY;
         currentWave = 0;
         enemiesKilled = 0;
         score = 0;
         waveInProgress = false;
         timeSinceWaveEnd = 0.0;
+        
+        // Initialize game timer
+        gameTime = 0.0;
+        gameWon = false;
+        gameLost = false;
         
         // Initialize systems
         eventManager = new GameEventManager();
@@ -77,34 +88,119 @@ public class GameState implements GameEventListener {
         eventManager.addListener(EventType.ENEMY_KILLED, this);
         eventManager.addListener(EventType.ENEMY_REACHED_END, this);
         
-        // Create default path
-        createDefaultPath();
+        // Create default paths for current level
+        createPathsForLevel(currentLevel);
+        
+        // Create house at the end of the path
+        createHouse();
     }
     
     /**
      * Create a default enemy path
      */
-    private void createDefaultPath() {
-        enemyPath = new ArrayList<>();
-        // Simple path from left to right with some curves
-        enemyPath.add(new Vector2D(0, 300));
-        enemyPath.add(new Vector2D(150, 300));
-        enemyPath.add(new Vector2D(150, 150));
-        enemyPath.add(new Vector2D(400, 150));
-        enemyPath.add(new Vector2D(400, 450));
-        enemyPath.add(new Vector2D(650, 450));
-        enemyPath.add(new Vector2D(650, 200));
-        enemyPath.add(new Vector2D(800, 200));
+    private void createPathsForLevel(int level) {
+        enemyPaths = new ArrayList<>();
+        switch (level) {
+            case 1: {
+                List<Vector2D> path = new ArrayList<>();
+                path.add(new Vector2D(0, 300));
+                path.add(new Vector2D(200, 300));
+                path.add(new Vector2D(400, 300));
+                path.add(new Vector2D(600, 300));
+                path.add(new Vector2D(760, 300));
+                enemyPaths.add(path);
+                break;
+            }
+            case 2: {
+                // Three paths converging to the same end
+                List<Vector2D> top = new ArrayList<>();
+                top.add(new Vector2D(0, 150));
+                top.add(new Vector2D(250, 150));
+                top.add(new Vector2D(450, 200));
+                top.add(new Vector2D(620, 260));
+                top.add(new Vector2D(760, 300));
+                List<Vector2D> mid = new ArrayList<>();
+                mid.add(new Vector2D(0, 350));
+                mid.add(new Vector2D(150, 350));
+                mid.add(new Vector2D(350, 320));
+                mid.add(new Vector2D(550, 310));
+                mid.add(new Vector2D(760, 300));
+                List<Vector2D> bot = new ArrayList<>();
+                bot.add(new Vector2D(0, 500));
+                bot.add(new Vector2D(200, 480));
+                bot.add(new Vector2D(420, 420));
+                bot.add(new Vector2D(620, 360));
+                bot.add(new Vector2D(760, 300));
+                enemyPaths.add(top);
+                enemyPaths.add(mid);
+                enemyPaths.add(bot);
+                break;
+            }
+            case 3:
+            default: {
+                // More complex and unpredictable: zigzags
+                List<Vector2D> pathA = new ArrayList<>();
+                pathA.add(new Vector2D(0, 100));
+                pathA.add(new Vector2D(120, 180));
+                pathA.add(new Vector2D(60, 260));
+                pathA.add(new Vector2D(200, 340));
+                pathA.add(new Vector2D(120, 420));
+                pathA.add(new Vector2D(300, 450));
+                pathA.add(new Vector2D(500, 380));
+                pathA.add(new Vector2D(680, 330));
+                pathA.add(new Vector2D(760, 300));
+                List<Vector2D> pathB = new ArrayList<>();
+                pathB.add(new Vector2D(0, 550));
+                pathB.add(new Vector2D(180, 520));
+                pathB.add(new Vector2D(300, 400));
+                pathB.add(new Vector2D(380, 250));
+                pathB.add(new Vector2D(520, 220));
+                pathB.add(new Vector2D(650, 260));
+                pathB.add(new Vector2D(760, 300));
+                List<Vector2D> pathC = new ArrayList<>();
+                pathC.add(new Vector2D(0, 280));
+                pathC.add(new Vector2D(200, 200));
+                pathC.add(new Vector2D(300, 300));
+                pathC.add(new Vector2D(450, 200));
+                pathC.add(new Vector2D(600, 350));
+                pathC.add(new Vector2D(760, 300));
+                enemyPaths.add(pathA);
+                enemyPaths.add(pathB);
+                enemyPaths.add(pathC);
+                break;
+            }
+        }
+    }
+    
+    /**
+     * Create house at the end of the path
+     */
+    private void createHouse() {
+        // Place house at end of the first path
+        List<Vector2D> firstPath = enemyPaths.get(0);
+        Vector2D endPoint = firstPath.get(firstPath.size() - 1);
+        house = new House(endPoint.x, endPoint.y);
+        System.out.println("House created at: " + endPoint.x + ", " + endPoint.y);
     }
     
     /**
      * Update the game state
      */
     public void update(double deltaTime) {
+        if (gameWon || gameLost) return;
+        
+        // Update game timer
+        gameTime += deltaTime;
+        if (gameTime >= GAME_DURATION) {
+            gameWon = true;
+            return;
+        }
+        
         // Update all entities
         updateEnemies(deltaTime);
         updateTowers(deltaTime);
         updateProjectiles(deltaTime);
+        updateHouse(deltaTime);
         
         // Update wave management
         updateWaveManagement(deltaTime);
@@ -114,6 +210,9 @@ public class GameState implements GameEventListener {
         
         // Clean up destroyed entities
         cleanupEntities();
+        
+        // Check win/lose conditions
+        checkGameEndConditions();
     }
     
     /**
@@ -228,8 +327,11 @@ public class GameState implements GameEventListener {
      * Spawn an enemy
      */
     public void spawnEnemy(Enemy enemy) {
-        enemy.setPath(new ArrayList<>(enemyPath));
+        // Assign a random path among available ones
+        List<Vector2D> path = enemyPaths.get(new Random().nextInt(enemyPaths.size()));
+        enemy.setPath(new ArrayList<>(path));
         enemies.add(enemy);
+        System.out.println("Enemy spawned at: " + enemy.getPosition().x + ", " + enemy.getPosition().y);
         
         // Fire enemy spawned event
         GameEvent event = new EnemySpawnedEvent(enemy);
@@ -246,6 +348,8 @@ public class GameState implements GameEventListener {
             if (playerMoney >= tower.getBaseCost()) {
                 towers.add(tower);
                 subtractMoney(tower.getBaseCost());
+                System.out.println("[PLACE][Tower] id=" + tower.getId() + " type=" + tower.getClass().getSimpleName() +
+                    " pos=(" + tower.getPosition().x + "," + tower.getPosition().y + ") cost=" + tower.getBaseCost());
                 
                 // Fire tower placed event
                 GameEvent event = new TowerPlacedEvent(tower);
@@ -261,10 +365,12 @@ public class GameState implements GameEventListener {
      * Check if tower position is valid
      */
     private boolean isValidTowerPosition(Vector2D position) {
-        // Check distance from path
-        for (Vector2D pathPoint : enemyPath) {
-            if (position.distanceTo(pathPoint) < 30) {
-                return false;
+        // Check distance from all paths
+        for (List<Vector2D> path : enemyPaths) {
+            for (Vector2D pathPoint : path) {
+                if (position.distanceTo(pathPoint) < 30) {
+                    return false;
+                }
             }
         }
         
@@ -308,23 +414,40 @@ public class GameState implements GameEventListener {
      * Handle enemy reaching end
      */
     private void enemyReachedEnd(Enemy enemy) {
-        playerHealth -= enemy.getDamage();
+        // Enemy attacks the house
+        house.takeDamage(enemy.getDamage());
         
         // Fire enemy reached end event
         GameEvent event = new EnemyReachedEndEvent(enemy);
         eventManager.fireEvent(event);
         
         enemy.destroy();
-        
-        // Check game over
-        if (playerHealth <= 0) {
-            gameOver();
+    }
+    
+    /**
+     * Update house
+     */
+    private void updateHouse(double deltaTime) {
+        if (house != null && house.isActive()) {
+            house.update(deltaTime);
+        }
+    }
+    
+    /**
+     * Check win/lose conditions
+     */
+    private void checkGameEndConditions() {
+        if (house != null && house.isDestroyed()) {
+            gameLost = true;
+            GameEvent event = new GameOverEvent(score);
+            eventManager.fireEvent(event);
         }
     }
     
     /**
      * Handle game over
      */
+    @SuppressWarnings("unused")
     private void gameOver() {
         GameEvent event = new GameOverEvent(score);
         eventManager.fireEvent(event);
@@ -373,6 +496,19 @@ public class GameState implements GameEventListener {
             case ENEMY_REACHED_END:
                 // Already handled in enemyReachedEnd method
                 break;
+            case GAME_OVER:
+            case TOWER_SOLD:
+            case PROJECTILE_FIRED:
+            case WAVE_STARTED:
+            case PROJECTILE_HIT:
+            case TOWER_UPGRADED:
+            case PLAYER_MONEY_CHANGED:
+            case TOWER_PLACED:
+            case ENEMY_SPAWNED:
+            case PLAYER_HEALTH_CHANGED:
+            case WAVE_COMPLETED:
+                // No-op in GameState for these events
+                break;
         }
     }
     
@@ -390,11 +526,26 @@ public class GameState implements GameEventListener {
     }
     
     public List<Vector2D> getEnemyPath() {
-        return new ArrayList<>(enemyPath);
+        // Backward compatibility: return first path
+        return new ArrayList<>(enemyPaths.get(0));
+    }
+
+    public List<List<Vector2D>> getEnemyPaths() {
+        List<List<Vector2D>> copy = new ArrayList<>();
+        for (List<Vector2D> p : enemyPaths) {
+            copy.add(new ArrayList<>(p));
+        }
+        return copy;
+    }
+
+    public void setLevel(int level) {
+        this.currentLevel = Math.max(1, Math.min(3, level));
+        createPathsForLevel(this.currentLevel);
+        createHouse();
     }
     
     public int getPlayerHealth() {
-        return playerHealth;
+        return house != null ? house.getCurrentHealth() : 0;
     }
     
     public int getPlayerMoney() {
@@ -419,6 +570,26 @@ public class GameState implements GameEventListener {
     
     public double getTimeUntilNextWave() {
         return waveInProgress ? 0.0 : WAVE_DELAY - timeSinceWaveEnd;
+    }
+    
+    public double getGameTime() {
+        return gameTime;
+    }
+    
+    public double getGameDuration() {
+        return GAME_DURATION;
+    }
+    
+    public boolean isGameWon() {
+        return gameWon;
+    }
+    
+    public boolean isGameLost() {
+        return gameLost;
+    }
+    
+    public House getHouse() {
+        return house;
     }
     
     public GameEventManager getEventManager() {

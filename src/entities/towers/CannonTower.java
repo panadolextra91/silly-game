@@ -17,11 +17,11 @@ public class CannonTower extends Tower {
     
     @Override
     protected void performAttack(Enemy target) {
-        // Cannon does splash damage
-        applySplashDamage(target.getPosition(), damage, 25.0);
+        fireProjectile(target, damage, entities.enemies.DamageType.PHYSICAL);
         addDamageDealt(damage);
     }
     
+    @SuppressWarnings("unused")
     private void applySplashDamage(utils.Vector2D center, int damage, double radius) {
         for (Enemy enemy : getCurrentEnemies()) {
             if (enemy.isActive() && center.distanceTo(enemy.getPosition()) <= radius) {

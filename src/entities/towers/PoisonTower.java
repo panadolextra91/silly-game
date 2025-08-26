@@ -1,7 +1,7 @@
 package entities.towers;
 
 import entities.enemies.Enemy;
-import entities.enemies.DamageType;
+//import entities.enemies.DamageType;
 import java.awt.Color;
 
 /**
@@ -16,8 +16,9 @@ public class PoisonTower extends Tower {
     
     @Override
     protected void performAttack(Enemy target) {
-        target.takeDamage(damage, DamageType.POISON);
-        target.applyPoison(5.0, damage / 2); // Poison for 5 seconds
+        fireProjectile(target, damage, entities.enemies.DamageType.POISON);
+        // Apply poison slow/dot as fallback
+        target.applyPoison(5.0, damage / 2);
         addDamageDealt(damage);
     }
     

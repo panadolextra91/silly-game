@@ -1,6 +1,8 @@
 package entities.enemies;
 
 import core.GameObject;
+import core.GameState;
+import entities.towers.Tower;
 import utils.Vector2D;
 import java.awt.Graphics2D;
 import java.awt.Color;
@@ -16,11 +18,17 @@ public abstract class Enemy extends GameObject {
     protected double speed;
     protected int reward;
     protected int damage; // Damage dealt to player when reaching end
+    protected int towerDamage; // Damage dealt to towers
     protected List<Vector2D> path;
     protected int currentPathIndex;
     protected double pathProgress; // 0.0 to 1.0, how far along the entire path
     protected Color color;
     protected int size;
+    
+    // Ranged attack
+    protected double rangedRange = 90.0;
+    protected double rangedFireRate = 0.5; // shots per second against towers
+    protected double timeSinceLastRangedShot = 0.0;
     
     // Resistance system
     protected double physicalResistance;
@@ -43,6 +51,7 @@ public abstract class Enemy extends GameObject {
         this.speed = speed;
         this.reward = reward;
         this.damage = 1;
+        this.towerDamage = 5; // Default tower damage
         this.color = color;
         this.size = 12;
         this.currentPathIndex = 0;
@@ -65,6 +74,8 @@ public abstract class Enemy extends GameObject {
     
     @Override
     protected void updateLogic(double deltaTime) {
+        // Timers
+        timeSinceLastRangedShot += deltaTime;
         updateStatusEffects(deltaTime);
         
         if (!frozen) {
@@ -80,6 +91,10 @@ public abstract class Enemy extends GameObject {
         if (currentHp <= 0) {
             die();
         }
+        
+        // Attack towers (ranged first, then melee if very close)
+        attemptRangedAttack();
+        attackNearbyTowers();
     }
     
     @Override
@@ -167,7 +182,10 @@ public abstract class Enemy extends GameObject {
     public void takeDamage(int damage, DamageType damageType) {
         double resistance = getResistance(damageType);
         int actualDamage = (int) (damage * (1.0 - resistance));
+        int before = currentHp;
         currentHp -= actualDamage;
+        System.out.println("[DMG][Enemy] id=" + getId() + " type=" + getClass().getSimpleName() +
+            " dmg=" + actualDamage + " (" + damageType + ") from=" + before + " -> " + currentHp);
         
         if (currentHp < 0) {
             currentHp = 0;
@@ -215,15 +233,15 @@ public abstract class Enemy extends GameObject {
     private Color getDisplayColor() {
         if (frozen) {
             return new Color(
-                (color.getRed() + 200) / 2,
-                (color.getGreen() + 200) / 2,
+                (color.getRed() + 100) / 2,
+                (color.getGreen() + 100) / 2,
                 255
             );
         } else if (poisoned) {
             return new Color(
-                Math.max(0, color.getRed() - 50),
-                Math.min(255, color.getGreen() + 50),
-                Math.max(0, color.getBlue() - 50)
+                Math.min(255, color.getRed() + 50),
+                Math.max(0, color.getGreen() - 50),
+                Math.min(255, color.getBlue() + 100)
             );
         }
         return color;
@@ -233,21 +251,24 @@ public abstract class Enemy extends GameObject {
      * Draw health bar above the enemy
      */
     private void drawHealthBar(Graphics2D g2d) {
-        if (currentHp < maxHp) {
-            int barWidth = size;
-            int barHeight = 4;
-            int x = (int) (position.x - barWidth / 2);
-            int y = (int) (position.y - size / 2 - barHeight - 2);
-            
-            // Background
-            g2d.setColor(Color.RED);
-            g2d.fillRect(x, y, barWidth, barHeight);
-            
-            // Health
-            g2d.setColor(Color.GREEN);
-            int healthWidth = (int) (barWidth * ((double) currentHp / maxHp));
-            g2d.fillRect(x, y, healthWidth, barHeight);
-        }
+        // Always show health bar for better visibility
+        int barWidth = size;
+        int barHeight = 4;
+        int x = (int) (position.x - barWidth / 2);
+        int y = (int) (position.y - size / 2 - barHeight - 2);
+        
+        // Background
+        g2d.setColor(Color.RED);
+        g2d.fillRect(x, y, barWidth, barHeight);
+        
+        // Health
+        g2d.setColor(Color.GREEN);
+        int healthWidth = (int) (barWidth * ((double) currentHp / maxHp));
+        g2d.fillRect(x, y, healthWidth, barHeight);
+        
+        // Border
+        g2d.setColor(Color.BLACK);
+        g2d.drawRect(x, y, barWidth, barHeight);
     }
     
     /**
@@ -320,6 +341,10 @@ public abstract class Enemy extends GameObject {
         return damage;
     }
     
+    public int getTowerDamage() {
+        return towerDamage;
+    }
+    
     public double getSpeed() {
         return speed;
     }
@@ -330,6 +355,59 @@ public abstract class Enemy extends GameObject {
     
     public boolean isPoisoned() {
         return poisoned;
+    }
+    
+    /**
+     * Set enemy speed (for status effects)
+     */
+    public void setSpeed(double newSpeed) {
+        this.speed = newSpeed;
+    }
+    
+    /**
+     * Attack nearby towers
+     */
+    private void attackNearbyTowers() {
+        if (!isActive()) return;
+        
+        List<Tower> towers = GameState.getInstance().getTowers();
+        for (Tower tower : towers) {
+            if (tower.isActive() && !tower.isDestroyed()) {
+                double distance = position.distanceTo(tower.getPosition());
+                if (distance <= 15) { // Attack range
+                    tower.takeDamage(towerDamage);
+                    System.out.println("[ENEMY][Melee] enemy=" + getId() + " -> tower=" + tower.getId() + " dmg=" + towerDamage);
+                    break; // Only attack one tower at a time
+                }
+            }
+        }
+    }
+
+    private void attemptRangedAttack() {
+        if (!isActive()) return;
+        if (timeSinceLastRangedShot < (1.0 / rangedFireRate)) return;
+        
+        Tower targetTower = findNearestTowerWithin(rangedRange);
+        if (targetTower != null) {
+            targetTower.takeDamage(Math.max(1, towerDamage / 2)); // ranged a bit weaker than melee
+            timeSinceLastRangedShot = 0.0;
+            System.out.println("[ENEMY][Ranged] enemy=" + getId() + " -> tower=" + targetTower.getId());
+        }
+    }
+    
+    private Tower findNearestTowerWithin(double range) {
+        Tower best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (Tower t : GameState.getInstance().getTowers()) {
+            if (t.isActive() && !t.isDestroyed()) {
+                double d = position.distanceTo(t.getPosition());
+                if (d <= range && d < bestDist) {
+                    bestDist = d;
+                    best = t;
+                }
+            }
+        }
+        return best;
     }
 }
 

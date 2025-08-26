@@ -2,7 +2,7 @@ package core;
 
 import entities.enemies.*;
 import patterns.factories.EnemyFactory;
-import core.EnemyType;
+//import core.EnemyType;
 import java.util.*;
 
 /**

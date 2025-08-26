@@ -40,6 +40,11 @@ public class GameEventManager {
      * Fire event immediately
      */
     public void fireEvent(GameEvent event) {
+        // Debug: log all events
+        try {
+            System.out.println("[EVENT][Fire] type=" + event.getType() + " ts=" + event.getTimestamp() +
+                " data=" + event.data);
+        } catch (Exception ignore) {}
         List<GameEventListener> eventListeners = listeners.get(event.getType());
         for (GameEventListener listener : eventListeners) {
             try {
@@ -54,6 +59,11 @@ public class GameEventManager {
      * Queue event for later processing
      */
     public void queueEvent(GameEvent event) {
+        // Debug: log queued events
+        try {
+            System.out.println("[EVENT][Queue] type=" + event.getType() + " ts=" + event.getTimestamp() +
+                " data=" + event.data);
+        } catch (Exception ignore) {}
         eventQueue.offer(event);
     }
     

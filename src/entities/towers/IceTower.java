@@ -1,7 +1,7 @@
 package entities.towers;
 
 import entities.enemies.Enemy;
-import entities.enemies.DamageType;
+//import entities.enemies.DamageType;
 import java.awt.Color;
 
 /**
@@ -16,8 +16,9 @@ public class IceTower extends Tower {
     
     @Override
     protected void performAttack(Enemy target) {
-        target.takeDamage(damage, DamageType.ICE);
-        target.applyFreeze(2.0); // Freeze for 2 seconds
+        fireProjectile(target, damage, entities.enemies.DamageType.ICE);
+        // Apply freeze effect upon hit is handled in projectile; as a fallback, apply here too
+        target.applyFreeze(2.0);
         addDamageDealt(damage);
     }
     

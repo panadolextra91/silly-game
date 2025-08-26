@@ -19,6 +19,9 @@ public class GameWindow extends JFrame implements GameEventListener {
     private final int TARGET_FPS = 60;
     private final long FRAME_TIME = 1000 / TARGET_FPS; // milliseconds
     
+    // Game state
+    private boolean isPaused = false;
+    
     public GameWindow() {
         initializeWindow();
         initializeComponents();
@@ -58,6 +61,7 @@ public class GameWindow extends JFrame implements GameEventListener {
         
         // Create UI panel (controls and info)
         uiPanel = new UIPanel(200, 600);
+        uiPanel.setGameWindow(this);
         add(uiPanel, BorderLayout.EAST);
         
         // Set focus to game panel for keyboard input
@@ -106,6 +110,8 @@ public class GameWindow extends JFrame implements GameEventListener {
      * Update game logic
      */
     private void updateGame() {
+        if (isPaused) return;
+        
         long currentTime = System.currentTimeMillis();
         double deltaTime = (currentTime - lastUpdateTime) / 1000.0; // Convert to seconds
         lastUpdateTime = currentTime;
@@ -113,11 +119,17 @@ public class GameWindow extends JFrame implements GameEventListener {
         // Cap delta time to prevent large jumps
         deltaTime = Math.min(deltaTime, 1.0 / 30.0); // Max 30 FPS equivalent
         
+        // Debug tick log (low frequency)
+        // System.out.println("[TICK] dt=" + String.format("%.3f", deltaTime));
+        
         // Update game state
         gameState.update(deltaTime);
         
         // Update UI
         uiPanel.update(deltaTime);
+        
+        // Check win/lose conditions
+        checkGameEndConditions();
     }
     
     /**
@@ -149,6 +161,47 @@ public class GameWindow extends JFrame implements GameEventListener {
             case WAVE_COMPLETED:
                 handleWaveCompleted(event);
                 break;
+            case ENEMY_SPAWNED:
+                // no-op UI side
+                break;
+            case ENEMY_KILLED:
+                // no-op UI side
+                break;
+            case ENEMY_REACHED_END:
+                // no-op UI side (house handles damage/game state reacts)
+                break;
+            case TOWER_PLACED:
+                // no-op UI side
+                break;
+            case TOWER_UPGRADED:
+                // no-op UI side
+                break;
+            case TOWER_SOLD:
+                // no-op UI side
+                break;
+            case PLAYER_HEALTH_CHANGED:
+                // no-op UI side
+                break;
+            case PLAYER_MONEY_CHANGED:
+                // no-op UI side; UIPanel pulls from GameState each frame
+                break;
+            case PROJECTILE_FIRED:
+                // no-op UI side
+                break;
+            case PROJECTILE_HIT:
+                // no-op UI side
+                break;
+        }
+    }
+    
+    /**
+     * Check for win/lose conditions
+     */
+    private void checkGameEndConditions() {
+        if (gameState.isGameWon()) {
+            handleGameWin();
+        } else if (gameState.isGameLost()) {
+            handleGameLose();
         }
     }
     
@@ -163,6 +216,48 @@ public class GameWindow extends JFrame implements GameEventListener {
             this,
             "Game Over!\nFinal Score: " + score + "\n\nPlay again?",
             "Game Over",
+            JOptionPane.YES_NO_OPTION
+        );
+        
+        if (result == JOptionPane.YES_OPTION) {
+            restartGame();
+        } else {
+            System.exit(0);
+        }
+    }
+    
+    /**
+     * Handle game win
+     */
+    private void handleGameWin() {
+        stopGameLoop();
+        
+        int score = gameState.getScore();
+        int result = JOptionPane.showConfirmDialog(
+            this,
+            "Congratulations! You Won!\nFinal Score: " + score + "\n\nPlay again?",
+            "Victory!",
+            JOptionPane.YES_NO_OPTION
+        );
+        
+        if (result == JOptionPane.YES_OPTION) {
+            restartGame();
+        } else {
+            System.exit(0);
+        }
+    }
+    
+    /**
+     * Handle game lose
+     */
+    private void handleGameLose() {
+        stopGameLoop();
+        
+        int score = gameState.getScore();
+        int result = JOptionPane.showConfirmDialog(
+            this,
+            "Your house was destroyed!\nFinal Score: " + score + "\n\nPlay again?",
+            "Defeat",
             JOptionPane.YES_NO_OPTION
         );
         
@@ -219,5 +314,24 @@ public class GameWindow extends JFrame implements GameEventListener {
      */
     public UIPanel getUIPanel() {
         return uiPanel;
+    }
+    
+    /**
+     * Toggle pause state
+     */
+    public void togglePause() {
+        isPaused = !isPaused;
+        if (isPaused) {
+            System.out.println("Game paused");
+        } else {
+            System.out.println("Game resumed");
+        }
+    }
+    
+    /**
+     * Check if game is paused
+     */
+    public boolean isPaused() {
+        return isPaused;
     }
 }

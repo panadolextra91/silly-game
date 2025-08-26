@@ -16,11 +16,11 @@ public class LightningTower extends Tower {
     
     @Override
     protected void performAttack(Enemy target) {
-        // Lightning chains to nearby enemies
-        applyChainLightning(target, damage, 3);
-        addDamageDealt(damage);
+        fireProjectile(target, target.getCurrentHp(), entities.enemies.DamageType.MAGICAL);
+        addDamageDealt(target.getCurrentHp());
     }
     
+    @SuppressWarnings("unused")
     private void applyChainLightning(Enemy initialTarget, int damage, int maxChains) {
         Enemy currentTarget = initialTarget;
         int currentDamage = damage;
